@@ -1,0 +1,39 @@
+# Core
+python-dotenv
+requests
+networkx
+
+# Database
+sqlalchemy
+pymysql
+PyMuPDF
+Pillow
+tabulate
+
+# Modal Labs
+modal
+
+# Streamlit Frontend
+streamlit
+
+# LLM/AI Clients
+openai
+
+# Resume Parsing
+pypdf2
+python-docx
+
+# NLP Engine
+spacy
+
+# FastAPI for web endpoint
+fastapi
+uvicorn
+python-multipart
+
+langchain-community
+praw
+beautifulsoup4
+lxml
+prophet
+plotly
