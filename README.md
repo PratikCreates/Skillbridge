@@ -197,6 +197,287 @@ skillbridge-mvp/
 
 ---
 
+## 💻 Code Examples
+
+### 1. AI Surfer: Autonomous Knowledge Graph Construction
+
+```python
+# skillbridge/core/knowledge_graph_builder.py
+import modal
+from skillbridge.processing.researcher_client import ResearcherClient
+from skillbridge.processing.nebius_client import NebiusClient
+
+@modal.function(schedule=modal.Cron("0 2 * * *"))  # Daily at 2 AM
+async def run_daily_knowledge_graph_update():
+    """Two-stage multi-agent workflow for knowledge graph construction"""
+    
+    # Stage 1: Researcher Agent (Gemini 2.0 Flash)
+    researcher = ResearcherClient()
+    job_descriptions = await researcher.search_and_extract(
+        role="Data Scientist",
+        num_postings=10
+    )
+    
+    # Stage 2: Expert Analyst Agent (Kimi-K2-Instruct)
+    analyst = NebiusClient()
+    structured_skills = await analyst.synthesize_skills(
+        job_text=job_descriptions,
+        prompt="""Analyze these job descriptions and return a JSON object with:
+        - 5-7 most critical skills
+        - Skill categories (Technical, Soft, Domain)
+        - Prerequisite relationships"""
+    )
+    
+    # Update knowledge graph
+    db_service.update_skill_graph(structured_skills)
+    return {"status": "success", "skills_added": len(structured_skills)}
+```
+
+### 2. Inference-Aware Recommendation Engine
+
+```python
+# skillbridge/core/career_graph.py
+import networkx as nx
+from typing import Set, List
+
+class InferenceEngine:
+    def __init__(self, skill_graph: nx.DiGraph):
+        self.graph = skill_graph
+    
+    def infer_implicit_skills(self, explicit_skills: Set[str]) -> Set[str]:
+        """Traverse graph to find all implied prerequisite skills"""
+        inferred = set()
+        
+        for skill in explicit_skills:
+            if skill in self.graph:
+                # Use nx.ancestors to find all prerequisites
+                prerequisites = nx.ancestors(self.graph, skill)
+                inferred.update(prerequisites)
+        
+        return inferred
+    
+    def compute_skill_gaps(
+        self, 
+        explicit_skills: Set[str],
+        target_role: str
+    ) -> List[str]:
+        """Identify true skill gaps using inference"""
+        
+        # Get required skills for target role
+        required_skills = self.get_role_requirements(target_role)
+        
+        # Infer implicit knowledge
+        inferred_skills = self.infer_implicit_skills(explicit_skills)
+        
+        # Complete user profile
+        user_profile = explicit_skills | inferred_skills
+        
+        # True gaps = Required - (Explicit + Inferred)
+        gaps = required_skills - user_profile
+        
+        return list(gaps)
+    
+    def generate_learning_path(self, skill_gaps: List[str]) -> List[str]:
+        """Create pedagogically sound learning sequence"""
+        
+        # Create subgraph with only gap skills
+        subgraph = self.graph.subgraph(skill_gaps)
+        
+        # Topological sort ensures prerequisites come first
+        try:
+            learning_path = list(nx.topological_sort(subgraph))
+            return learning_path
+        except nx.NetworkXError:
+            # Handle circular dependencies
+            return self._resolve_cycles(subgraph)
+```
+
+### 3. Temporal Trend Forecasting
+
+```python
+# skillbridge/core/prediction_engine.py
+from prophet import Prophet
+import pandas as pd
+
+class TemporalEngine:
+    def __init__(self):
+        self.model = Prophet(
+            changepoint_prior_scale=0.05,
+            seasonality_mode='multiplicative'
+        )
+    
+    async def fetch_skill_popularity(self, skill: str) -> pd.DataFrame:
+        """Multi-source data fusion"""
+        
+        # Stack Overflow API
+        so_data = await self.stack_exchange_api.get_tag_counts(skill)
+        
+        # Reddit API
+        reddit_data = await self.reddit_api.search_mentions(
+            skill,
+            subreddits=['forhire', 'jobs', 'careerguidance']
+        )
+        
+        # Combine and normalize
+        df = pd.DataFrame({
+            'ds': dates,  # Prophet requires 'ds' column
+            'y': so_data['count'] + reddit_data['engagement_score']
+        })
+        
+        return df
+    
+    def forecast_demand(self, historical_data: pd.DataFrame) -> dict:
+        """6-month skill demand prediction"""
+        
+        self.model.fit(historical_data)
+        
+        # Forecast 180 days ahead
+        future = self.model.make_future_dataframe(periods=180)
+        forecast = self.model.predict(future)
+        
+        return {
+            'trend': forecast['trend'].iloc[-1],
+            'forecast': forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']],
+            'is_growing': forecast['trend'].iloc[-1] > forecast['trend'].iloc[0]
+        }
+```
+
+### 4. Hybrid Skill Extraction
+
+```python
+# skillbridge/processing/skill_extraction.py
+import spacy
+from typing import List, Set
+
+class HybridSkillExtractor:
+    def __init__(self):
+        self.nlp = spacy.load("en_core_web_sm")
+        self.skill_patterns = self._load_skill_dictionary()
+    
+    def extract_skills(self, resume_text: str) -> Set[str]:
+        """Two-stage extraction: spaCy + LLM validation"""
+        
+        # Stage 1: Fast pattern matching with spaCy
+        doc = self.nlp(resume_text)
+        candidate_skills = set()
+        
+        for token in doc:
+            if token.text.lower() in self.skill_patterns:
+                candidate_skills.add(token.text)
+        
+        # Stage 2: LLM validation for context
+        validated_skills = self._llm_validate(
+            resume_text, 
+            candidate_skills
+        )
+        
+        return validated_skills
+    
+    def _llm_validate(self, text: str, candidates: Set[str]) -> Set[str]:
+        """Use LLM to validate skills in context"""
+        
+        prompt = f"""Given this resume text, validate which of these 
+        candidate skills are actually present: {candidates}
+        
+        Return only skills that are clearly demonstrated."""
+        
+        response = self.llm_client.complete(prompt)
+        return set(response['validated_skills'])
+```
+
+### 5. Modal Serverless Deployment
+
+```python
+# skillbridge/api/main.py
+import modal
+
+app = modal.App("skillbridge")
+
+# Define compute resources
+image = modal.Image.debian_slim().pip_install_from_requirements("requirements.txt")
+
+@app.function(
+    image=image,
+    schedule=modal.Cron("0 2 * * *"),  # Daily at 2 AM
+    secrets=[modal.Secret.from_name("skillbridge-secrets")]
+)
+async def daily_ai_surfer():
+    """Autonomous knowledge graph update"""
+    from skillbridge.core.knowledge_graph_builder import run_update
+    return await run_update()
+
+@app.function(
+    image=image,
+    schedule=modal.Cron("0 3 * * 0"),  # Weekly on Sunday
+    secrets=[modal.Secret.from_name("skillbridge-secrets")]
+)
+async def weekly_temporal_analysis():
+    """Trend forecasting and popularity tracking"""
+    from skillbridge.core.temporal_analysis import run_analysis
+    return await run_analysis()
+
+@app.function(image=image)
+@modal.web_endpoint(method="POST")
+async def analyze_resume(request: dict):
+    """Real-time user analysis endpoint"""
+    from skillbridge.core.skill_analysis import analyze_user
+    
+    resume_text = request['resume']
+    target_role = request['target_role']
+    
+    result = await analyze_user(resume_text, target_role)
+    
+    return {
+        "skill_gaps": result['gaps'],
+        "learning_path": result['path'],
+        "inferred_skills": result['inferred'],
+        "trend_forecast": result['trends']
+    }
+```
+
+### 6. Graph Validation
+
+```python
+# skillbridge/core/graph_validator.py
+import networkx as nx
+
+class GraphValidator:
+    def validate_graph(self, G: nx.DiGraph) -> dict:
+        """Ensure graph quality and consistency"""
+        
+        issues = []
+        
+        # Check for circular dependencies
+        try:
+            cycles = list(nx.simple_cycles(G))
+            if cycles:
+                issues.append(f"Circular dependencies found: {cycles}")
+        except:
+            pass
+        
+        # Validate categories
+        for node in G.nodes():
+            if 'category' not in G.nodes[node]:
+                issues.append(f"Node {node} missing category")
+        
+        # Check connectivity
+        if not nx.is_weakly_connected(G):
+            components = list(nx.weakly_connected_components(G))
+            issues.append(f"Graph has {len(components)} disconnected components")
+        
+        return {
+            "is_valid": len(issues) == 0,
+            "issues": issues,
+            "stats": {
+                "nodes": G.number_of_nodes(),
+                "edges": G.number_of_edges(),
+                "avg_degree": sum(dict(G.degree()).values()) / G.number_of_nodes()
+            }
+        }
+```
+
+---
+
 ## 🎯 Competitive Advantages
 
 | Feature | LinkedIn Skills | O*NET | CAPER | SkillBridge |
